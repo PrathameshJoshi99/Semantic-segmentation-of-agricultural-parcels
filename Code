@@ -1,0 +1,112 @@
+import os
+import numpy as np
+import torch
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
+
+# Define the PASTISDataset class
+class PASTISDataset(Dataset):
+    def __init__(self, root_dir, split="train", transform=None):
+        self.root_dir = root_dir
+        self.split = split
+        self.transform = transform
+
+        # Load the PASTIS dataset metadata
+        with open(os.path.join(root_dir, "metadata.json"), "r") as f:
+            metadata = json.load(f)
+
+        # Create a list of image paths and segmentation labels
+        self.image_paths = []
+        self.segmentation_labels = []
+
+        for patch in metadata[split]:
+            image_path = os.path.join(root_dir, "images", patch["id"] + ".tif")
+            segmentation_label = os.path.join(root_dir, "annotations", patch["id"] + ".png")
+
+            self.image_paths.append(image_path)
+            self.segmentation_labels.append(segmentation_label)
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        image = cv2.imread(self.image_paths[idx])
+        segmentation_label = cv2.imread(self.segmentation_labels[idx])
+
+        # Preprocess the image and segmentation label
+        image = transforms.ToTensor()(image)
+        segmentation_label = transforms.ToTensor()(segmentation_label)
+
+        return image, segmentation_label
+
+# Define the training function
+def train(model, train_loader, optimizer, criterion, device):
+    model.train()
+
+    for epoch in range(num_epochs):
+        for images, segmentation_labels in train_loader:
+            images = images.to(device)
+            segmentation_labels = segmentation_labels.to(device)
+
+            # Forward pass
+            outputs = model(images)
+
+            # Calculate the loss
+            loss = criterion(outputs, segmentation_labels)
+
+            # Backward pass and update the model parameters
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+# Define the evaluation function
+def evaluate(model, val_loader, device):
+    model.eval()
+
+    with torch.no_grad():
+        # Calculate the intersection over union (IoU) for each class
+        ious = []
+        for images, segmentation_labels in val_loader:
+            images = images.to(device)
+            segmentation_labels = segmentation_labels.to(device)
+
+            outputs = model(images)
+
+            # Calculate the IoU for each class
+            iou = calculate_iou(outputs, segmentation_labels)
+
+            ious.append(iou)
+
+        # Calculate the mean IoU (mIoU)
+        miou = np.mean(ious)
+
+        return miou
+
+# Define the main function
+def main():
+    # Load the PASTIS dataset
+    root_dir = "/path/to/PASTIS/dataset"
+    train_dataset = PASTISDataset(root_dir, split="train")
+    val_dataset = PASTISDataset(root_dir, split="val")
+
+    # Create the data loaders
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    # Select the deep learning model
+    model = DeepLabv3Plus(num_classes=18)
+
+    # Define the optimizer and criterion
+    optimizer = Adam(model.parameters(), lr=learning_rate)
+    criterion = CrossEntropyLoss()
+
+    # Train the model
+    train(model, train_loader, optimizer, criterion, device)
+
+    # Evaluate the model
+    miou = evaluate(model, val_loader, device)
+
+    print("Mean IoU:", miou)
+
+if __name__ == "__main__":
+    main()
